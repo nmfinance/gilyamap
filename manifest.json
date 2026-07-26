@@ -1,0 +1,32 @@
+{
+  "name": "Москва и москвичи — карта Гиляровского",
+  "short_name": "Гиляровский",
+  "description": "Интерактивная карта по книге В. А. Гиляровского: 186 адресов, истории, цитаты и старые фотографии.",
+  "lang": "ru",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#EFE6D2",
+  "theme_color": "#EFE6D2",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
