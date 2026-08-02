@@ -147,9 +147,32 @@
   ol.route-stops{margin:10px 0 0 20px; padding:0;}
   ol.route-stops li{margin:6px 0; font-size:14.5px; cursor:pointer;}
   ol.route-stops li:hover{text-decoration:underline; color:#2E4A66;}
-  /* сепия старой карты */
+  /* сепия старой карты — слой тайлов один на обе подложки, фильтр общий */
   .leaflet-tile-pane{filter:sepia(.5) saturate(.75) contrast(.92) brightness(1.02);}
   .leaflet-container{font-family:'PT Serif', serif;}
+  /* ---------- Переключатель подложек ---------- */
+  /* .leaflet-touch — иначе на сенсорных экранах leaflet.css перебивает рамку своей серой */
+  .leaflet-control-layers,
+  .leaflet-touch .leaflet-control-layers{
+    background:#FBF6E9; color:var(--ink);
+    border:1px solid var(--ink); border-radius:0;
+    box-shadow:3px 3px 0 rgba(44,34,26,.25);
+    font-family:'PT Sans Narrow', sans-serif;
+  }
+  .leaflet-control-layers-expanded{padding:7px 11px 7px 9px;}
+  .leaflet-control-layers-base label{display:block; margin:3px 0; cursor:pointer;}
+  .leaflet-control-layers-base label > div{display:flex; align-items:center; gap:7px;}
+  .leaflet-control-layers-base input{accent-color:var(--ink); flex:none; margin:0;}
+  .leaflet-control-layers-base span{
+    font-size:13px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink);
+  }
+  /* ---------- Копирайт ---------- */
+  .leaflet-control-attribution{
+    background:rgba(251,246,233,.82); color:var(--ink-soft);
+    font-family:'PT Sans Narrow', sans-serif; font-size:10.5px;
+    letter-spacing:.03em; padding:1px 6px;
+  }
+  .leaflet-control-attribution a{color:var(--ink-soft);}
   /* попапы */
   .leaflet-popup-content-wrapper{
     background:#FBF5E6; color:var(--ink); border:1px solid var(--ink-soft);
@@ -203,6 +226,11 @@
       border-bottom:1px solid var(--rule); padding:8px; cursor:pointer; color:var(--ink);
     }
     header h1{font-size:17px;} header .sub{font-size:10px; letter-spacing:.14em;}
+    /* переключатель компактнее, копирайт не должен на него наезжать */
+    .leaflet-control-layers-expanded{padding:5px 8px 5px 7px;}
+    .leaflet-control-layers-base label{margin:2px 0;}
+    .leaflet-control-layers-base span{font-size:11.5px; letter-spacing:.06em;}
+    .leaflet-control-attribution{font-size:9.5px; max-width:56vw;}
   }
 </style>
 </head>
@@ -311,36 +339,63 @@ const MAPBOX_TOKEN = MAPBOX_PARTS.join('.');
 const MAPBOX_STYLE  = 'mapbox/streets-v12';   /* варианты: mapbox/light-v11, mapbox/outdoors-v12 */
 const ATTRIB = 'Данные: gilyarovsky.ru · фото: pastvu.com';
 
+/* Атрибуция подложек. Требование лицензий OpenStreetMap и Mapbox — не убирать.
+   Leaflet сам подставляет строку того слоя, который сейчас включён. */
+const OSM_ATTRIB    = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> | ' + ATTRIB;
+const MAPBOX_ATTRIB = '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> ' + OSM_ATTRIB;
+
+/* Убираем из копирайта флажок и ссылку «Leaflet», сам контрол оставляем:
+   атрибуция OSM/Mapbox и подпись об источниках должны остаться видимыми. */
+map.attributionControl.setPrefix(false);
+
 function osmLayer(){
   return L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
-    attribution: '&copy; OpenStreetMap | ' + ATTRIB
+    attribution: OSM_ATTRIB
+  });
+}
+function mapboxLayer(){
+  return L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}', {
+    maxZoom: 19,
+    tileSize: 512,
+    zoomOffset: -1,
+    id: MAPBOX_STYLE,
+    accessToken: MAPBOX_TOKEN,
+    attribution: MAPBOX_ATTRIB
   });
 }
 
-let baseLayer;
-if(!MAPBOX_TOKEN || MAPBOX_PARTS.length < 3){
-  baseLayer = osmLayer().addTo(map);
-} else {
-baseLayer = L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}', {
-  maxZoom: 19,
-  tileSize: 512,
-  zoomOffset: -1,
-  id: MAPBOX_STYLE,
-  accessToken: MAPBOX_TOKEN,
-  attribution: '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> | ' + ATTRIB
-}).addTo(map);
+/* ---- Переключатель подложек (внизу слева, всегда развёрнут) ---- */
+const hasMapbox   = Boolean(MAPBOX_TOKEN) && MAPBOX_PARTS.length >= 3;
+const streetsTile = osmLayer();
+const baseLayers  = {};
+let mapboxTile = null;
 
-let tileErrors = 0, switched = false;
-baseLayer.on('tileerror', function(){
-  tileErrors++;
-  if(tileErrors >= 8 && !switched){         /* токен протух, лимит исчерпан или нет сети */
-    switched = true;
-    map.removeLayer(baseLayer);
-    baseLayer = osmLayer().addTo(map);
-    console.warn('Mapbox недоступен — подложка переключена на OpenStreetMap');
-  }
-});
+if(hasMapbox){
+  mapboxTile = mapboxLayer().addTo(map);   /* «Старая Москва» — по умолчанию */
+  baseLayers['Старая Москва'] = mapboxTile;
+} else {
+  streetsTile.addTo(map);                  /* без токена остаётся только схема улиц */
+}
+baseLayers['Схема улиц'] = streetsTile;
+
+L.control.layers(baseLayers, null, {position:'bottomleft', collapsed:false}).addTo(map);
+
+/* Откат на OpenStreetMap, если Mapbox не отвечает. Переключаем слои через карту —
+   контрол слушает layeradd/layerremove и сам переставит отметку, без рассинхрона. */
+if(hasMapbox){
+  let tileErrors = 0, switched = false;
+  mapboxTile.on('tileerror', function(){
+    tileErrors++;
+    if(tileErrors >= 8 && !switched){       /* токен протух, лимит исчерпан или нет сети */
+      switched = true;
+      if(map.hasLayer(mapboxTile)){         /* если пользователь уже сам выбрал схему — не мешаем */
+        map.removeLayer(mapboxTile);
+        map.addLayer(streetsTile);
+      }
+      console.warn('Mapbox недоступен — подложка переключена на OpenStreetMap');
+    }
+  });
 }
 
 /* ---- Кнопка «Где я?» ---- */
