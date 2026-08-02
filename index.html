@@ -223,6 +223,40 @@
   }
   #lbClose:hover{background:rgba(239,230,210,.15);}
   @media (prefers-reduced-motion: reduce){ .pp-photo{transition:none;} }
+  /* ---------- Словарь эпохи ---------- */
+  .gl{
+    text-decoration:underline dotted var(--wax);
+    text-decoration-thickness:1px; text-underline-offset:3px;
+    cursor:help;
+  }
+  #glPop{
+    position:fixed; display:none; z-index:2000;   /* выше панелей карты, ниже лайтбокса (3000) */
+    width:300px; max-width:calc(100vw - 16px);
+    background:var(--paper); color:var(--ink);
+    border:1px solid var(--ink); box-shadow:3px 3px 0 rgba(44,34,26,.25);
+    padding:12px 38px 12px 14px;
+  }
+  #glPop.open{display:block;}
+  #glPopT{font-family:'Prata', serif; font-size:15px; line-height:1.3; margin-bottom:6px;}
+  #glPopD{font-family:'PT Serif', serif; font-size:13.5px; line-height:1.5;}
+  #glPopX{
+    position:absolute; top:5px; right:5px; width:28px; height:28px;
+    background:none; border:1px solid var(--ink-soft); color:var(--ink);
+    font-family:'PT Sans Narrow', sans-serif; font-size:14px; line-height:1;
+    cursor:pointer; border-radius:0;
+  }
+  #glPopX:hover{background:var(--paper-dark);}
+  @media (max-width:760px){
+    /* на телефоне — закреплённая плашка внизу экрана */
+    #glPop{
+      left:0; right:0; bottom:0; top:auto;
+      width:auto; max-width:none;
+      border-left:none; border-right:none; border-bottom:none;
+      box-shadow:0 -4px 14px rgba(44,34,26,.28);
+      padding:14px 54px 16px 16px;
+    }
+    #glPopX{width:44px; height:44px; font-size:18px;}  /* палец */
+  }
   .pp-ch{font-size:12px; font-style:italic; color:var(--ink-soft);}
   .pp-ch a{color:#2E4A66;}
   .approx{font-size:11.5px; color:var(--ink-soft); font-style:italic;}
@@ -313,6 +347,11 @@
       <a id="lbSrc" target="_blank" rel="noopener">Источник: pastvu.com</a>
     </figcaption>
   </figure>
+</div>
+<div id="glPop" role="dialog" aria-label="Пояснение термина">
+  <button id="glPopX" title="Закрыть" aria-label="Закрыть">✕</button>
+  <div id="glPopT"></div>
+  <div id="glPopD"></div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
@@ -493,8 +532,9 @@ function openInfo(pt){
   html += `<span class="pp-status ${pt.st}">${STATUS_T[pt.st]}</span>`;
   if(pt.ap) html += ` <span class="approx">место примерное</span>`;
   if(pt.ph) html += `<img class="pp-photo" src="${pt.ph}" data-name="${pt.n}" alt="Историческое фото" loading="lazy" title="Открыть в увеличенном виде">`;
-  if(pt.d) html += `<div class="pp-desc">${pt.d}</div>`;
-  if(pt.q) html += `<blockquote class="bq">${pt.q}</blockquote>`;
+  const glFound = {};   /* каждый термин подчёркиваем один раз на карточку (d и q вместе) */
+  if(pt.d) html += `<div class="pp-desc">${glMark(pt.d, glFound)}</div>`;
+  if(pt.q) html += `<blockquote class="bq">${glMark(pt.q, glFound)}</blockquote>`;
   html += `<div class="info-actions">
     <button class="btn primary" onclick="filterByChapter(${pt.ch})">Показать все места этой главы</button>
     <a class="btn" href="${CH_BASE + chp.u}" target="_blank" rel="noopener">Читать главу на gilyarovsky.ru →</a>
@@ -503,10 +543,12 @@ function openInfo(pt){
   infoBody.innerHTML = html;
   infoBody.scrollTop = 0;
   infoEl.classList.add('open');
+  closeGlossary();   /* пояснение от прошлой карточки больше не к месту */
 }
 function closeInfo(){
   infoEl.classList.remove('open');
   if(activeMarker){ activeMarker.setStyle({radius:7, weight:1.5}); activeMarker = null; }
+  closeGlossary();
 }
 document.getElementById('infoClose').addEventListener('click', closeInfo);
 map.on('click', closeInfo);
@@ -777,6 +819,97 @@ document.addEventListener('keydown', function(e){
   if(e.key === 'Escape' && lbEl.classList.contains('open')) closeLightbox();
 });
 
+/* ===================== СЛОВАРЬ ЭПОХИ ===================== */
+/* Термины из glossary.json подчёркиваются в текстах карточек; по клику
+   всплывает пояснение. Если словарь не загрузился — карта работает
+   как раньше, без подчёркиваний. */
+let GL = [];              // термины, отсортированные по убыванию длины регулярки
+const GL_BY_ID = {};
+const glPop  = document.getElementById('glPop');
+const glPopT = document.getElementById('glPopT');
+const glPopD = document.getElementById('glPopD');
+
+function loadGlossary(){
+  fetch('glossary.json')
+    .then(function(resp){ return resp.ok ? resp.json() : null; })
+    .then(function(g){
+      if(!g || !Array.isArray(g.terms)) return;
+      g.terms.forEach(function(t){
+        if(!t || !t.id || !t.re || !t.t || !t.d) return;
+        try{
+          /* словарь писан в питоньей семантике, где \w включает кириллицу;
+             в JS \w — только [A-Za-z0-9_], поэтому разворачиваем сами */
+          const reSrc = t.re.replace(/\\w/g, '[a-zа-яё0-9_]');
+          GL.push({id:t.id, len:t.re.length,
+            re:new RegExp('(?<![а-яёa-z])(?:' + reSrc + ')(?![а-яё])', 'iu')});
+          GL_BY_ID[t.id] = t;
+        }catch(e){ /* битую регулярку пропускаем, остальные работают */ }
+      });
+      GL.sort(function(a,b){ return b.len - a.len; });
+    })
+    .catch(function(){ /* словаря нет — просто без пояснений */ });
+}
+
+/* Разбиваем строку по уже вставленным span.gl и прогоняем регулярки
+   только по кускам вне разметки; каждый термин — один раз на карточку
+   (found — общий объект для полей d и q). */
+const GL_SPLIT = /(<span class="gl"[^>]*>[^<]*<\/span>)/;
+function glMark(text, found){
+  if(!GL.length || !text) return text;
+  let out = text;
+  for(let k = 0; k < GL.length; k++){
+    const term = GL[k];
+    if(found[term.id]) continue;
+    const parts = out.split(GL_SPLIT);
+    for(let i = 0; i < parts.length; i++){
+      if(parts[i].lastIndexOf('<span class="gl', 0) === 0) continue;  // уже размечено
+      const m = term.re.exec(parts[i]);
+      if(m){
+        parts[i] = parts[i].slice(0, m.index) +
+          '<span class="gl" data-gl="' + term.id + '">' + m[0] + '</span>' +
+          parts[i].slice(m.index + m[0].length);
+        found[term.id] = true;
+        out = parts.join('');
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+function openGlossary(el){
+  const term = GL_BY_ID[el.dataset.gl];
+  if(!term) return;
+  glPopT.textContent = term.t;
+  glPopD.textContent = term.d;
+  glPop.classList.add('open');
+  if(window.matchMedia('(max-width:760px)').matches){
+    /* плашку внизу экрана позиционирует CSS — инлайновые координаты убираем */
+    glPop.style.left = ''; glPop.style.top = '';
+  } else {
+    const r = el.getBoundingClientRect();
+    const pw = glPop.offsetWidth, ph = glPop.offsetHeight;
+    let left = Math.round(r.left + r.width/2 - pw/2);
+    left = Math.max(8, Math.min(left, window.innerWidth - pw - 8));
+    let top = Math.round(r.bottom + 8);                       /* под словом */
+    if(top + ph > window.innerHeight - 8) top = Math.round(r.top - ph - 8);  /* не влезло — над словом */
+    if(top < 8) top = 8;
+    glPop.style.left = left + 'px';
+    glPop.style.top = top + 'px';
+  }
+}
+function closeGlossary(){ glPop.classList.remove('open'); }
+
+document.addEventListener('click', function(e){
+  const gl = e.target.closest('.gl');
+  if(gl){ openGlossary(gl); return; }        /* новый термин закрывает предыдущий сам */
+  if(glPop.classList.contains('open') && !e.target.closest('#glPop')) closeGlossary();
+});
+document.getElementById('glPopX').addEventListener('click', closeGlossary);
+document.addEventListener('keydown', function(e){
+  if(e.key === 'Escape' && glPop.classList.contains('open')) closeGlossary();
+});
+
 /* ===================== ЗАГРУЗКА ТОЧЕК ===================== */
 /* Массив точек вынесен в points.json и грузится через fetch:
    пока идёт загрузка — показываем индикатор, при ошибке — сообщение и кнопку «Повторить». */
@@ -816,6 +949,7 @@ document.addEventListener('keydown', function(e){
 
   reloadBtn.addEventListener('click', loadPoints);
   loadPoints();
+  loadGlossary();   /* словарь эпохи грузим один раз, вместе с точками */
 })();
 </script>
 </body>
