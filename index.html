@@ -191,7 +191,38 @@
   .pp-status.n{color:var(--wax); border-color:var(--wax);}
   .pp-status.x{color:var(--dust); border-color:var(--dust);}
   .pp-desc{margin:4px 0 6px;}
-  .pp-photo{width:100%; display:block; margin:6px 0; border:1px solid var(--ink-soft); filter:sepia(.15);}
+  .pp-photo{width:100%; display:block; margin:6px 0; border:1px solid var(--ink-soft); filter:sepia(.15);
+    cursor:zoom-in; transition:filter .15s ease, box-shadow .15s ease;}
+  .pp-photo:hover{filter:sepia(.05) brightness(1.05); box-shadow:2px 2px 0 rgba(44,34,26,.3);}
+  /* ---------- Лайтбокс ---------- */
+  #lightbox{
+    position:fixed; inset:0; z-index:3000;              /* выше всего Leaflet (контролы ~1000) */
+    display:none; align-items:center; justify-content:center;
+    background:rgba(44,34,26,.85);                       /* тон --ink */
+  }
+  #lightbox.open{display:flex;}
+  #lbFig{margin:0; display:flex; flex-direction:column; align-items:center; max-width:92vw;}
+  #lbImg{max-width:92vw; max-height:88vh; width:auto; height:auto; display:block;
+    border:1px solid var(--paper-dark); background:var(--paper);}
+  #lbStatus{
+    font-family:'PT Sans Narrow', sans-serif; font-size:15px; letter-spacing:.15em;
+    text-transform:uppercase; color:var(--paper); padding:28px 10px;
+  }
+  #lbFig figcaption{text-align:center; padding:12px 6px 0; max-width:92vw;}
+  #lbName{font-family:'Prata', serif; font-size:17px; line-height:1.3; color:var(--paper);}
+  #lbSrc{
+    display:inline-block; margin-top:5px; font-family:'PT Sans Narrow', sans-serif;
+    font-size:12px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--paper-dark); text-decoration:underline;
+  }
+  #lbClose{
+    position:absolute; top:10px; right:10px; width:44px; height:44px;  /* палец на телефоне */
+    background:none; border:1px solid var(--paper-dark); color:var(--paper);
+    font-family:'PT Sans Narrow', sans-serif; font-size:22px; line-height:1;
+    cursor:pointer; border-radius:0;
+  }
+  #lbClose:hover{background:rgba(239,230,210,.15);}
+  @media (prefers-reduced-motion: reduce){ .pp-photo{transition:none;} }
   .pp-ch{font-size:12px; font-style:italic; color:var(--ink-soft);}
   .pp-ch a{color:#2E4A66;}
   .approx{font-size:11.5px; color:var(--ink-soft); font-style:italic;}
@@ -271,6 +302,17 @@
     </div>
     <div id="infoBody"></div>
   </div>
+</div>
+<div id="lightbox" role="dialog" aria-modal="true" aria-label="Просмотр фотографии">
+  <button id="lbClose" title="Закрыть" aria-label="Закрыть">✕</button>
+  <figure id="lbFig">
+    <div id="lbStatus">Загрузка…</div>
+    <img id="lbImg" alt="Историческое фото" style="display:none">
+    <figcaption>
+      <div id="lbName"></div>
+      <a id="lbSrc" target="_blank" rel="noopener">Источник: pastvu.com</a>
+    </figcaption>
+  </figure>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
@@ -450,7 +492,7 @@ function openInfo(pt){
   let html = `<div class="info-chapter">Глава ${Number(pt.ch)+1} · «${chp.t}»</div>`;
   html += `<span class="pp-status ${pt.st}">${STATUS_T[pt.st]}</span>`;
   if(pt.ap) html += ` <span class="approx">место примерное</span>`;
-  if(pt.ph) html += `<img class="pp-photo" src="${pt.ph}" alt="Историческое фото" loading="lazy">`;
+  if(pt.ph) html += `<img class="pp-photo" src="${pt.ph}" data-name="${pt.n}" alt="Историческое фото" loading="lazy" title="Открыть в увеличенном виде">`;
   if(pt.d) html += `<div class="pp-desc">${pt.d}</div>`;
   if(pt.q) html += `<blockquote class="bq">${pt.q}</blockquote>`;
   html += `<div class="info-actions">
@@ -667,11 +709,73 @@ routeListEl.addEventListener('change', (e)=>{
 
 /* мобильный тумблер */
 const tb = document.getElementById('toggleBar'), sb = document.getElementById('sidebar');
+/* Сворачивание сайдбара меняет высоту контейнера карты. Leaflet об этом не знает,
+   и плитка остаётся прежнего размера — сверху появлялась пустая полоса.
+   invalidateSize сам читает новые размеры контейнера (браузер пересчитает
+   вёрстку синхронно), поэтому зовём его сразу после смены класса. */
+function remapSize(){
+  map.invalidateSize({animate:false});
+}
 tb.addEventListener('click', ()=>{
   sb.classList.toggle('closed');
   tb.textContent = sb.classList.contains('closed') ? 'Фильтры и главы ▸' : 'Фильтры и главы ▾';
+  remapSize();
 });
-if(window.matchMedia('(max-width:760px)').matches){ sb.classList.add('closed'); tb.textContent='Фильтры и главы ▸'; }
+if(window.matchMedia('(max-width:760px)').matches){
+  sb.classList.add('closed');
+  tb.textContent='Фильтры и главы ▸';
+  remapSize();
+}
+
+/* ===================== ЛАЙТБОКС ===================== */
+/* Просмотр фото из карточки в увеличенном виде. Клики ловим делегированием
+   на документе, поэтому лайтбокс работает и для фотографий, которые появятся
+   в карточках позже. */
+const lbEl     = document.getElementById('lightbox');
+const lbImg    = document.getElementById('lbImg');
+const lbName   = document.getElementById('lbName');
+const lbSrc    = document.getElementById('lbSrc');
+const lbStatus = document.getElementById('lbStatus');
+
+function openLightbox(src, name){
+  lbName.textContent = name || '';
+  lbSrc.href = src;
+  lbStatus.textContent = 'Загрузка…';
+  lbStatus.style.display = '';
+  lbImg.style.display = 'none';
+  lbImg.onload = function(){
+    lbStatus.style.display = 'none';
+    lbImg.style.display = '';
+  };
+  lbImg.onerror = function(){
+    lbStatus.textContent = 'Фотография недоступна';
+    lbImg.style.display = 'none';
+  };
+  lbImg.removeAttribute('src');   /* иначе повторное открытие того же фото может не дать load */
+  lbImg.src = src;
+  lbEl.classList.add('open');
+}
+function closeLightbox(){
+  lbEl.classList.remove('open');
+  lbImg.onload = lbImg.onerror = null;
+  lbImg.removeAttribute('src');   /* останавливаем загрузку, если фото так и не пришло */
+}
+
+document.addEventListener('click', function(e){
+  const img = e.target.closest('.pp-photo');
+  if(!img) return;
+  const src = img.getAttribute('src');
+  if(!src) return;
+  openLightbox(src, img.dataset.name || infoTitle.textContent);
+});
+lbEl.addEventListener('click', function(e){
+  /* клик по фону закрывает; по фотографии и подписи — нет */
+  if(!e.target.closest('#lbFig')) closeLightbox();
+});
+document.getElementById('lbClose').addEventListener('click', closeLightbox);
+document.addEventListener('keydown', function(e){
+  if(e.key === 'Escape' && lbEl.classList.contains('open')) closeLightbox();
+});
 
 /* ===================== ЗАГРУЗКА ТОЧЕК ===================== */
 /* Массив точек вынесен в points.json и грузится через fetch:
