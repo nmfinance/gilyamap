@@ -6,7 +6,7 @@
    чтобы карта открывалась без интернета и быстрее грузилась при повторных заходах.
    При обновлении карты меняйте VERSION — старые кэши будут удалены. */
 
-const VERSION      = 'v10';
+const VERSION      = 'v11';
 const APP_CACHE    = 'gilya-app-'   + VERSION;
 const TILE_CACHE   = 'gilya-tiles-' + VERSION;
 const PHOTO_CACHE  = 'gilya-photos-'+ VERSION;
@@ -89,6 +89,11 @@ self.addEventListener('fetch', function(event){
   let url;
   try { url = new URL(req.url); } catch(e){ return; }
   if(url.protocol !== 'http:' && url.protocol !== 'https:') return;
+
+  // 0. Видео «оживших фотографий»: слишком тяжёлые для кэша, к тому же
+  //    проигрыватель ходит за ними Range-запросами, которые кэш не умеет.
+  //    Просто не вмешиваемся — браузер сходит в сеть сам.
+  if(url.pathname.endsWith('.mp4')) return;
 
   // 1. Сама страница: сначала сеть (чтобы видеть обновления), при офлайне — кэш
   if(req.mode === 'navigate'){

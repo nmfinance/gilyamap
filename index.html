@@ -223,6 +223,37 @@
   }
   #lbClose:hover{background:rgba(239,230,210,.15);}
   @media (prefers-reduced-motion: reduce){ .pp-photo{transition:none;} }
+  /* ---------- «Ожившие фотографии» ---------- */
+  .pv-wrap{position:relative; margin:6px 0;}
+  .pv-wrap .pp-photo{margin:0;}
+  .pv-video{width:100%; display:block; border:1px solid var(--ink-soft); background:#000; cursor:pointer;}
+  .pv-play{
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:56px; height:56px; border-radius:50%;              /* больше минимума 44px */
+    background:rgba(239,230,210,.92); color:var(--ink);
+    border:1px solid var(--ink); font-size:20px; line-height:1; cursor:pointer;
+    box-shadow:2px 2px 0 rgba(44,34,26,.3);
+  }
+  .pv-play:hover{background:#FBF6E9;}
+  .pv-badge{
+    position:absolute; left:6px; top:6px;
+    font-family:'PT Sans Narrow', sans-serif; font-size:10.5px; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--ink);
+    background:rgba(239,230,210,.85); border:1px solid var(--ink-soft); padding:2px 7px;
+    pointer-events:none;
+  }
+  .pv-mute{
+    position:absolute; right:6px; bottom:6px; width:44px; height:44px;   /* палец */
+    background:rgba(239,230,210,.92); border:1px solid var(--ink); color:var(--ink);
+    font-size:17px; line-height:1; cursor:pointer; border-radius:0;
+  }
+  .pv-mute:hover{background:#FBF6E9;}
+  /* видеоверсия в лайтбоксе — вписана в экран, как фото */
+  .pv-lb .pv-poster, .pv-lb .pv-video{
+    max-width:92vw; max-height:82vh; width:auto; height:auto; display:block;
+    border:1px solid var(--paper-dark); background:var(--paper); cursor:pointer;
+  }
+  .pv-lb .pv-poster{cursor:default;}
   /* ---------- Словарь эпохи ---------- */
   .gl{
     text-decoration:underline dotted var(--wax);
@@ -531,7 +562,14 @@ function openInfo(pt){
   let html = `<div class="info-chapter">Глава ${Number(pt.ch)+1} · «${chp.t}»</div>`;
   html += `<span class="pp-status ${pt.st}">${STATUS_T[pt.st]}</span>`;
   if(pt.ap) html += ` <span class="approx">место примерное</span>`;
-  if(pt.ph) html += `<img class="pp-photo" src="${pt.ph}" data-name="${pt.n}" alt="Историческое фото" loading="lazy" title="Открыть в увеличенном виде">`;
+  if(pt.v && pt.ph){
+    /* «ожившее фото»: постер + кнопка ▶; сам <video> создаётся только по нажатию */
+    html += `<div class="pv-wrap" data-v="${pt.v}">
+      <img class="pp-photo" src="${pt.ph}" data-name="${pt.n}" alt="Историческое фото" loading="lazy" title="Открыть в увеличенном виде">
+      <button class="pv-play" aria-label="Оживить фотографию" title="Ожившее фото">▶</button>
+      <span class="pv-badge">ожившее фото · реконструкция</span>
+    </div>`;
+  } else if(pt.ph) html += `<img class="pp-photo" src="${pt.ph}" data-name="${pt.n}" alt="Историческое фото" loading="lazy" title="Открыть в увеличенном виде">`;
   const glFound = {};   /* каждый термин подчёркиваем один раз на карточку (d и q вместе) */
   if(pt.d) html += `<div class="pp-desc">${glMark(pt.d, glFound)}</div>`;
   if(pt.q) html += `<blockquote class="bq">${glMark(pt.q, glFound)}</blockquote>`;
@@ -540,6 +578,7 @@ function openInfo(pt){
     <a class="btn" href="${CH_BASE + chp.u}" target="_blank" rel="noopener">Читать главу на gilyarovsky.ru →</a>
   </div>`;
   html += `<div class="coords">${pt.la.toFixed(5)}, ${pt.lo.toFixed(5)}</div>`;
+  unloadVideos(infoBody);   /* видео прошлой карточки не должно играть в фоне */
   infoBody.innerHTML = html;
   infoBody.scrollTop = 0;
   infoEl.classList.add('open');
@@ -549,6 +588,7 @@ function closeInfo(){
   infoEl.classList.remove('open');
   if(activeMarker){ activeMarker.setStyle({radius:7, weight:1.5}); activeMarker = null; }
   closeGlossary();
+  unloadVideos(infoBody);
 }
 document.getElementById('infoClose').addEventListener('click', closeInfo);
 map.on('click', closeInfo);
@@ -820,10 +860,29 @@ function openLightbox(src, name){
   lbImg.src = src;
   lbEl.classList.add('open');
 }
+/* видеоверсия лайтбокса: постер + ▶ + бейдж, управление то же, что в карточке */
+function openLightboxVideo(pt){
+  lbName.textContent = pt.n;
+  if(/^https?:\/\//.test(pt.ph)){ lbSrc.href = pt.ph; lbSrc.style.display = ''; }
+  else { lbSrc.removeAttribute('href'); lbSrc.style.display = 'none'; }
+  lbStatus.style.display = 'none';
+  lbImg.style.display = 'none';
+  const wrap = document.createElement('div');
+  wrap.className = 'pv-wrap pv-lb';
+  wrap.dataset.v = pt.v;
+  wrap.innerHTML = `<img class="pv-poster" src="${pt.ph}" alt="Историческое фото">
+    <button class="pv-play" aria-label="Оживить фотографию" title="Ожившее фото">▶</button>
+    <span class="pv-badge">ожившее фото · реконструкция</span>`;
+  document.getElementById('lbFig').insertBefore(wrap, lbEl.querySelector('figcaption'));
+  lbEl.classList.add('open');
+}
+
 function closeLightbox(){
   lbEl.classList.remove('open');
   lbImg.onload = lbImg.onerror = null;
   lbImg.removeAttribute('src');   /* останавливаем загрузку, если фото так и не пришло */
+  unloadVideos(lbEl);
+  const w = lbEl.querySelector('.pv-wrap'); if(w) w.remove();
 }
 
 document.addEventListener('click', function(e){
@@ -831,7 +890,11 @@ document.addEventListener('click', function(e){
   if(!img) return;
   const src = img.getAttribute('src');
   if(!src) return;
-  openLightbox(src, img.dataset.name || infoTitle.textContent);
+  const name = img.dataset.name || infoTitle.textContent;
+  /* у точки с «ожившим фото» и лайтбокс — видеоверсия */
+  const pt = P.find(p => p.n === name);
+  if(pt && pt.v && pt.ph){ openLightboxVideo(pt); return; }
+  openLightbox(src, name);
 });
 lbEl.addEventListener('click', function(e){
   /* клик по фону закрывает; по фотографии и подписи — нет */
@@ -840,6 +903,70 @@ lbEl.addEventListener('click', function(e){
 document.getElementById('lbClose').addEventListener('click', closeLightbox);
 document.addEventListener('keydown', function(e){
   if(e.key === 'Escape' && lbEl.classList.contains('open')) closeLightbox();
+});
+
+/* ===================== «ОЖИВШИЕ ФОТОГРАФИИ» ===================== */
+/* <video> создаётся только по нажатию ▶ — до этого трафик не тратится.
+   Играет всегда не больше одного видео; закрытие карточки или лайтбокса
+   ставит на паузу и снимает src. */
+let activeVideo = null;
+
+function startVideo(wrap){
+  let v = wrap.querySelector('video.pv-video');
+  if(!v){
+    const poster = wrap.querySelector('img');
+    v = document.createElement('video');
+    v.className = 'pv-video';
+    v.muted = true; v.loop = true; v.playsInline = true;
+    v.setAttribute('playsinline','');   /* iOS */
+    v.preload = 'none';
+    if(poster && poster.getAttribute('src')) v.poster = poster.getAttribute('src');
+    v.src = wrap.dataset.v;             /* ленивая подстановка src — только сейчас */
+    if(poster) poster.style.display = 'none';
+    wrap.insertBefore(v, wrap.firstChild);
+    const mbtn = document.createElement('button');
+    mbtn.className = 'pv-mute';
+    mbtn.setAttribute('aria-label','Включить звук');
+    mbtn.textContent = '🔇';
+    wrap.appendChild(mbtn);
+    const pbtn = wrap.querySelector('.pv-play');
+    if(pbtn) pbtn.style.display = 'none';
+  }
+  if(activeVideo && activeVideo !== v && !activeVideo.paused) activeVideo.pause();
+  activeVideo = v;
+  v.play().catch(function(){ /* автоплей могут запретить — видео останется на постере */ });
+}
+
+function unloadVideos(scope){
+  scope.querySelectorAll('video.pv-video').forEach(function(v){
+    v.pause();
+    v.removeAttribute('src');
+    v.load();
+    if(activeVideo === v) activeVideo = null;
+  });
+}
+
+document.addEventListener('click', function(e){
+  const play = e.target.closest('.pv-play');
+  if(play){ startVideo(play.closest('.pv-wrap')); return; }
+  const mute = e.target.closest('.pv-mute');
+  if(mute){
+    const v = mute.closest('.pv-wrap').querySelector('video.pv-video');
+    if(v){
+      v.muted = !v.muted;
+      mute.textContent = v.muted ? '🔇' : '🔊';
+      mute.setAttribute('aria-label', v.muted ? 'Включить звук' : 'Выключить звук');
+    }
+    return;
+  }
+  const vid = e.target.closest('video.pv-video');
+  if(vid){
+    if(vid.paused){
+      if(activeVideo && activeVideo !== vid && !activeVideo.paused) activeVideo.pause();
+      activeVideo = vid;
+      vid.play().catch(function(){});
+    } else vid.pause();
+  }
 });
 
 /* ===================== СЛОВАРЬ ЭПОХИ ===================== */
