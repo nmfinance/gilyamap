@@ -6,7 +6,7 @@
    чтобы карта открывалась без интернета и быстрее грузилась при повторных заходах.
    При обновлении карты меняйте VERSION — старые кэши будут удалены. */
 
-const VERSION      = 'v12';
+const VERSION      = 'v14';
 const APP_CACHE    = 'gilya-app-'   + VERSION;
 const TILE_CACHE   = 'gilya-tiles-' + VERSION;
 const PHOTO_CACHE  = 'gilya-photos-'+ VERSION;
@@ -26,8 +26,12 @@ const PRECACHE = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
+  './og-image.png',
   'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css',
-  'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js'
+  'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css',
+  'https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.min.css',
+  'https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js'
 ];
 
 /* ---------- установка ---------- */

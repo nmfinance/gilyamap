@@ -6,6 +6,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Москва и москвичи — карта Гиляровского</title>
 <meta name="description" content="Интерактивная карта по книге В. А. Гиляровского «Москва и москвичи»: 186 адресов, истории, цитаты и старые фотографии.">
+<!-- OpenGraph: превью при шаринге в мессенджерах и соцсетях; og:image требует абсолютный URL -->
+<meta property="og:title" content="Москва и москвичи — карта Гиляровского">
+<meta property="og:description" content="186 мест из книги: истории, цитаты, старые фотографии и ожившие снимки. 5 пешеходных маршрутов">
+<meta property="og:image" content="https://nmfinance.github.io/gilyamap/og-image.png">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://nmfinance.github.io/gilyamap/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://nmfinance.github.io/gilyamap/og-image.png">
 <meta name="theme-color" content="#EFE6D2">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -21,6 +29,8 @@
   .me-dot{width:14px; height:14px; background:#2E4A66; border:2px solid #fff; border-radius:50%; box-shadow:0 0 0 2px #2E4A66;}
 </style>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Prata&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=PT+Sans+Narrow&display=swap" rel="stylesheet">
 <style>
@@ -60,6 +70,42 @@
     padding-bottom:4px; margin:14px 0 8px;
   }
   .blocklabel:first-child{margin-top:0;}
+  /* ---------- Поиск по местам ---------- */
+  #searchWrap{position:relative; margin-bottom:12px;}
+  #searchBox{
+    width:100%; font-family:'PT Serif', serif; font-size:14px; padding:7px 9px;
+    background:#FBF6E9; color:var(--ink); border:1px solid var(--ink-soft); border-radius:0;
+  }
+  #searchBox::placeholder{color:var(--ink-soft); font-style:italic;}
+  #searchList{
+    position:absolute; left:0; right:0; top:100%; z-index:1200;
+    background:#FBF6E9; border:1px solid var(--ink); border-top:none;
+    box-shadow:3px 3px 0 rgba(44,34,26,.25);
+    display:none; max-height:280px; overflow-y:auto;
+  }
+  #searchList.open{display:block;}
+  .sr-item{
+    padding:7px 9px; cursor:pointer; font-size:13.5px; line-height:1.35;
+    border-bottom:1px solid var(--rule);
+  }
+  .sr-item:last-child{border-bottom:none;}
+  .sr-item:hover{background:var(--paper-dark);}
+  .sr-item .sr-ch{
+    font-family:'PT Sans Narrow', sans-serif; font-size:11px;
+    letter-spacing:.08em; text-transform:uppercase; color:var(--ink-soft);
+    white-space:nowrap;
+  }
+  .sr-empty{padding:7px 9px; font-size:13px; font-style:italic; color:var(--ink-soft);}
+  /* ---------- Кластеры маркеров ---------- */
+  .cl-seal{background:none; border:none;}
+  .cl-seal > div{
+    width:100%; height:100%; border-radius:50%;
+    background:rgba(239,230,210,.95);              /* бумажная «печать» */
+    border:2px solid var(--ink); color:var(--ink);
+    font-family:'PT Sans Narrow', sans-serif; font-weight:bold;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:2px 2px 0 rgba(44,34,26,.3);
+  }
   /* статусы */
   .stat{display:flex; align-items:center; gap:8px; margin:5px 0; cursor:pointer; font-size:14px; user-select:none;}
   .stat input{accent-color:var(--ink);}
@@ -100,6 +146,26 @@
     width:28px; height:28px; cursor:pointer; border-radius:0;
   }
   #infoClose:hover{background:var(--paper-dark);}
+  #shareBtn{
+    flex:none; background:none; border:1px solid var(--ink-soft); color:var(--ink);
+    font-size:14px; line-height:1; width:28px; height:28px; cursor:pointer; border-radius:0;
+  }
+  #shareBtn:hover{background:var(--paper-dark);}
+  /* подпись под фотографией: год съёмки и ссылка на страницу снимка */
+  .ph-cap{
+    font-family:'PT Sans Narrow', sans-serif; font-size:11.5px; letter-spacing:.06em;
+    color:var(--ink-soft); margin:-2px 0 8px;
+  }
+  .ph-cap a{color:var(--ink-soft);}
+  /* toast «Ссылка скопирована» */
+  #toast{
+    position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(8px);
+    background:var(--ink); color:var(--paper);
+    font-family:'PT Sans Narrow', sans-serif; font-size:13px; letter-spacing:.1em;
+    text-transform:uppercase; padding:9px 16px; z-index:3500;
+    opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease;
+  }
+  #toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
   #infoBody{padding:12px 16px 20px; overflow-y:auto; flex:1;}
   #infoBody .pp-status{font-size:12px; padding:2px 9px;}
   #infoBody .pp-desc{font-size:15px; line-height:1.55; margin:10px 0;}
@@ -336,6 +402,11 @@
   <aside id="sidebar">
     <button id="toggleBar">Фильтры и главы ▾</button>
     <div class="pane">
+      <div id="searchWrap">
+        <input id="searchBox" type="search" placeholder="Найти место…" autocomplete="off"
+               aria-label="Поиск по местам карты">
+        <div id="searchList" role="listbox"></div>
+      </div>
       <div class="blocklabel">Судьба зданий</div>
       <label class="stat"><input type="checkbox" data-st="s" checked><span class="seal s"></span>Сохранились</label>
       <label class="stat"><input type="checkbox" data-st="p" checked><span class="seal p"></span>Перестроены / перенесены</label>
@@ -360,6 +431,7 @@
   <div id="info" aria-live="polite">
     <div id="infoHead">
       <div id="infoTitle"></div>
+      <button id="shareBtn" title="Скопировать ссылку на место" aria-label="Скопировать ссылку на место" style="display:none">🔗</button>
       <button id="infoClose" title="Закрыть" aria-label="Закрыть">✕</button>
     </div>
     <div id="infoBody"></div>
@@ -378,12 +450,14 @@
     </figcaption>
   </figure>
 </div>
+<div id="toast" role="status" aria-live="polite"></div>
 <div id="glPop" role="dialog" aria-label="Пояснение термина">
   <button id="glPopX" title="Закрыть" aria-label="Закрыть">✕</button>
   <div id="glPopT"></div>
   <div id="glPopD"></div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
 <script>
 /* ===================== ГЛАВЫ ===================== */
 const CH_BASE = "http://www.gilyarovsky.ru/index.php/2010-09-11-15-43-53/";
@@ -569,6 +643,12 @@ function openInfo(pt){
       <span class="pv-badge">ожившее фото · реконструкция</span>
     </div>`;
   } else if(pt.ph) html += `<img class="pp-photo" src="${pt.ph}" data-name="${pt.n}" alt="Историческое фото" loading="lazy" title="Открыть в увеличенном виде">`;
+  if(pt.ph && (pt.py || pt.pp)){
+    /* подпись: год съёмки и ссылка на страницу снимка на pastvu */
+    const capText = pt.py ? `Фотография ${pt.py} года` : 'Фотография';
+    const capSrc = pt.pp ? `<a href="${pt.pp}" target="_blank" rel="noopener">pastvu</a>` : 'pastvu';
+    html += `<div class="ph-cap">${capText} · ${capSrc}</div>`;
+  }
   const glFound = {};   /* каждый термин подчёркиваем один раз на карточку (d и q вместе) */
   if(pt.d) html += `<div class="pp-desc">${glMark(pt.d, glFound)}</div>`;
   if(pt.q) html += `<blockquote class="bq">${glMark(pt.q, glFound)}</blockquote>`;
@@ -582,12 +662,18 @@ function openInfo(pt){
   infoBody.scrollTop = 0;
   infoEl.classList.add('open');
   closeGlossary();   /* пояснение от прошлой карточки больше не к месту */
+  currentPt = pt;
+  document.getElementById('shareBtn').style.display = '';
+  setUrlParam(pt.n);   /* постоянная ссылка в адресной строке, без перезагрузки */
 }
 function closeInfo(){
   infoEl.classList.remove('open');
   if(activeMarker){ activeMarker.setStyle({radius:7, weight:1.5}); activeMarker = null; }
   closeGlossary();
   unloadVideos(infoBody);
+  currentPt = null;
+  document.getElementById('shareBtn').style.display = 'none';
+  setUrlParam(null);
 }
 document.getElementById('infoClose').addEventListener('click', closeInfo);
 map.on('click', closeInfo);
@@ -598,6 +684,25 @@ function filterByChapter(ch){
 }
 
 const markers = [];
+/* Кластеризация: точки живут в кластер-группе, а не на карте напрямую.
+   Фильтры добавляют/убирают маркеры именно отсюда — кластеры пересчитываются сами. */
+const clusterGroup = L.markerClusterGroup({
+  maxClusterRadius: 36,
+  disableClusteringAtZoom: 16,
+  spiderfyOnMaxZoom: true,
+  showCoverageOnHover: false,
+  iconCreateFunction: function(cluster){
+    const n = cluster.getChildCount();
+    const size = n < 10 ? 32 : (n < 30 ? 38 : 44);
+    return L.divIcon({
+      className: 'cl-seal',
+      iconSize: [size, size],
+      iconAnchor: [size/2, size/2],
+      html: `<div style="font-size:${n < 100 ? 14 : 12}px">${n}</div>`
+    });
+  }
+}).addTo(map);
+
 /* строит маркеры точек — вызывается после загрузки points.json */
 function buildMarkers(){
   P.forEach(pt=>{
@@ -633,19 +738,67 @@ function refresh(){
   const ch = chSel.value;
   let shown = 0;
   const bounds = [];
+  const toAdd = [], toRemove = [];
   markers.forEach(m=>{
     const pt = m._pt;
     const ok = stOn[pt.st] && (ch==='all' || String(pt.ch)===ch);
-    if(ok){ if(!map.hasLayer(m)) m.addTo(map); shown++; bounds.push([pt.la, pt.lo]); }
-    else if(map.hasLayer(m)) map.removeLayer(m);
+    if(ok){ if(!clusterGroup.hasLayer(m)) toAdd.push(m); shown++; bounds.push([pt.la, pt.lo]); }
+    else if(clusterGroup.hasLayer(m)) toRemove.push(m);
   });
+  /* пакетные операции — кластеры пересчитываются один раз, а не 186 */
+  if(toRemove.length) clusterGroup.removeLayers(toRemove);
+  if(toAdd.length) clusterGroup.addLayers(toAdd);
   counter.textContent = `Показано мест: ${shown} из ${P.length}`;
-  if(activeMarker && !map.hasLayer(activeMarker)) closeInfo();
+  if(activeMarker && !clusterGroup.hasLayer(activeMarker)) closeInfo();
   if(ch!=='all' && bounds.length) map.fitBounds(bounds, {padding:[40,40], maxZoom:16});
 }
 stChecks.forEach(c=> c.addEventListener('change', refresh));
 chSel.addEventListener('change', refresh);
 /* первичный refresh() вызывается после загрузки точек — см. loadPoints */
+
+/* ===================== ПОИСК ПО МЕСТАМ ===================== */
+const searchBox = document.getElementById('searchBox');
+const searchList = document.getElementById('searchList');
+
+/* без учёта регистра и буквы ё: е == ё */
+function normSearch(s){ return s.toLowerCase().replace(/ё/g, 'е'); }
+
+function closeSearch(){ searchList.classList.remove('open'); searchList.innerHTML = ''; }
+
+function runSearch(){
+  const q = normSearch(searchBox.value.trim());
+  if(!q){ closeSearch(); return; }
+  const hits = [];
+  for(let i = 0; i < P.length && hits.length < 8; i++){
+    if(normSearch(P[i].n).indexOf(q) !== -1) hits.push(P[i]);
+  }
+  searchList.innerHTML = '';
+  if(!hits.length){
+    searchList.innerHTML = '<div class="sr-empty">Ничего не найдено</div>';
+  } else {
+    hits.forEach(pt=>{
+      const d = document.createElement('div');
+      d.className = 'sr-item';
+      d.setAttribute('role', 'option');
+      d.innerHTML = pt.n + ' <span class="sr-ch">· ' + chLabel(pt.ch) + '</span>';
+      d.addEventListener('click', function(){
+        closeSearch();
+        searchBox.value = pt.n;
+        map.setView([pt.la, pt.lo], 17);
+        openInfo(pt);
+      });
+      searchList.appendChild(d);
+    });
+  }
+  searchList.classList.add('open');
+}
+searchBox.addEventListener('input', runSearch);
+searchBox.addEventListener('keydown', function(e){
+  if(e.key === 'Escape'){ closeSearch(); searchBox.blur(); }
+});
+document.addEventListener('click', function(e){
+  if(!e.target.closest('#searchWrap')) closeSearch();   /* клик мимо закрывает список */
+});
 
 /* ===================== МАРШРУТЫ ===================== */
 const ROUTES = [
@@ -742,6 +895,9 @@ const routeLayers = [];
 const routeListEl = document.getElementById('routeList');
 
 function openRouteInfo(r, idx){
+  currentPt = null;   /* карточка маршрута — не место: без ?p= и кнопки «поделиться» */
+  document.getElementById('shareBtn').style.display = 'none';
+  setUrlParam(null);
   infoTitle.textContent = r.name;
   let html = `<div class="route-meta" style="color:${r.color}">▬ ${r.time}</div>`;
   html += `<div class="pp-desc">${r.desc}</div>`;
@@ -833,12 +989,18 @@ const lbName   = document.getElementById('lbName');
 const lbSrc    = document.getElementById('lbSrc');
 const lbStatus = document.getElementById('lbStatus');
 
-function openLightbox(src, name){
+function openLightbox(src, name, pt){
   lbName.textContent = name || '';
-  /* «Источник: pastvu.com» показываем только для фото с pastvu;
-     у локальных снимков из папки photos/ внешнего источника нет */
-  if(/^https?:\/\//.test(src)){
+  /* Подпись-источник: если у точки есть страница снимка (pp) — ведём на неё
+     и показываем год (py); иначе прежнее поведение: ссылка на файл с pastvu,
+     а у локальных снимков из папки photos/ источника нет вовсе */
+  if(pt && pt.pp){
+    lbSrc.href = pt.pp;
+    lbSrc.textContent = pt.py ? `Фотография ${pt.py} года · pastvu.com` : 'Источник: pastvu.com';
+    lbSrc.style.display = '';
+  } else if(/^https?:\/\//.test(src)){
     lbSrc.href = src;
+    lbSrc.textContent = 'Источник: pastvu.com';
     lbSrc.style.display = '';
   } else {
     lbSrc.removeAttribute('href');
@@ -928,8 +1090,8 @@ document.addEventListener('click', function(e){
   if(!src) return;
   const name = img.dataset.name || infoTitle.textContent;
   /* фото всегда открывается лайтбоксом; у «ожившего фото» поверх — угловая кнопка ▶ */
-  openLightbox(src, name);
   const pt = P.find(p => p.n === name);
+  openLightbox(src, name, pt);
   if(pt && pt.v && pt.ph) attachLbVideoControls(pt);
 });
 lbEl.addEventListener('click', function(e){
@@ -1108,6 +1270,56 @@ document.addEventListener('keydown', function(e){
   if(e.key === 'Escape' && glPop.classList.contains('open')) closeGlossary();
 });
 
+/* ===================== ПОСТОЯННЫЕ ССЫЛКИ ===================== */
+/* ?p=<имя точки>: карта открывается сразу на месте с открытой карточкой.
+   Кнопка 🔗 в шапке карточки копирует такую ссылку в буфер. */
+let currentPt = null;
+
+function setUrlParam(name){
+  const u = new URL(location.href);
+  if(name) u.searchParams.set('p', name);
+  else u.searchParams.delete('p');
+  history.replaceState(null, '', u);
+}
+
+let toastTimer = null;
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 2000);
+}
+
+document.getElementById('shareBtn').addEventListener('click', function(){
+  if(!currentPt) return;
+  const u = new URL(location.origin + location.pathname);
+  u.searchParams.set('p', currentPt.n);
+  const link = u.toString();
+  function done(){ showToast('Ссылка скопирована'); }
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(link).then(done).catch(function(){ legacyCopy(link); done(); });
+  } else { legacyCopy(link); done(); }
+  function legacyCopy(text){
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch(e){}
+    ta.remove();
+  }
+});
+
+/* открытие по постоянной ссылке — после загрузки точек */
+function openFromUrl(){
+  const pName = new URLSearchParams(location.search).get('p');
+  if(!pName) return;
+  const pt = P.find(function(p){ return p.n === pName; });
+  if(!pt) return;
+  /* зум 17 выше порога кластеризации (16) — точка гарантированно раскрыта */
+  map.setView([pt.la, pt.lo], 17);
+  openInfo(pt);
+}
+
 /* ===================== ЗАГРУЗКА ТОЧЕК ===================== */
 /* Массив точек вынесен в points.json и грузится через fetch:
    пока идёт загрузка — показываем индикатор, при ошибке — сообщение и кнопку «Повторить». */
@@ -1138,6 +1350,7 @@ document.addEventListener('keydown', function(e){
         buildMarkers();
         refresh();
         overlay.classList.add('hidden');
+        openFromUrl();   /* постоянная ссылка ?p= — когда точки уже на карте */
       })
       .catch(function(e){
         console.error('Не удалось загрузить points.json:', e);
