@@ -227,33 +227,30 @@
   .pv-wrap{position:relative; margin:6px 0;}
   .pv-wrap .pp-photo{margin:0;}
   .pv-video{width:100%; display:block; border:1px solid var(--ink-soft); background:#000; cursor:pointer;}
-  .pv-play{
-    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-    width:56px; height:56px; border-radius:50%;              /* больше минимума 44px */
-    background:rgba(239,230,210,.92); color:var(--ink);
-    border:1px solid var(--ink); font-size:20px; line-height:1; cursor:pointer;
-    box-shadow:2px 2px 0 rgba(44,34,26,.3);
+  /* компактные кнопки в правом нижнем углу — центр снимка свободен,
+     клик по самому фото открывает лайтбокс, как у обычных фотографий */
+  .pv-play, .pv-mute{
+    position:absolute; right:8px; bottom:8px; width:44px; height:44px;   /* палец */
+    border-radius:50%;
+    background:rgba(239,230,210,.8);            /* полупрозрачная бумага (--paper) */
+    color:var(--ink); border:1px solid var(--ink-soft);
+    font-size:17px; line-height:1; cursor:pointer;
   }
-  .pv-play:hover{background:#FBF6E9;}
+  .pv-play:hover, .pv-mute:hover{background:rgba(239,230,210,.95);}
   .pv-badge{
-    position:absolute; left:6px; top:6px;
-    font-family:'PT Sans Narrow', sans-serif; font-size:10.5px; letter-spacing:.08em;
+    position:absolute; left:8px; bottom:8px;
+    font-family:'PT Sans Narrow', sans-serif; font-size:11px; letter-spacing:.06em;
     text-transform:uppercase; color:var(--ink);
-    background:rgba(239,230,210,.85); border:1px solid var(--ink-soft); padding:2px 7px;
+    background:rgba(239,230,210,.75); border:1px solid var(--ink-soft); padding:1px 6px;
     pointer-events:none;
   }
-  .pv-mute{
-    position:absolute; right:6px; bottom:6px; width:44px; height:44px;   /* палец */
-    background:rgba(239,230,210,.92); border:1px solid var(--ink); color:var(--ink);
-    font-size:17px; line-height:1; cursor:pointer; border-radius:0;
+  /* лайтбокс: медиа-контейнер, чтобы угловые кнопки позиционировались по снимку */
+  #lbMedia{position:relative;}
+  #lbMedia .pv-video{
+    width:auto; height:auto; max-width:92vw; max-height:82vh;
+    border:1px solid var(--paper-dark); background:var(--paper);
   }
-  .pv-mute:hover{background:#FBF6E9;}
-  /* видеоверсия в лайтбоксе — вписана в экран, как фото */
-  .pv-lb .pv-poster, .pv-lb .pv-video{
-    max-width:92vw; max-height:82vh; width:auto; height:auto; display:block;
-    border:1px solid var(--paper-dark); background:var(--paper); cursor:pointer;
-  }
-  .pv-lb .pv-poster{cursor:default;}
+  #lbMedia .pv-mute{right:60px;}   /* динамик левее кнопки ▶/возврата */
   /* ---------- Словарь эпохи ---------- */
   .gl{
     text-decoration:underline dotted var(--wax);
@@ -371,8 +368,10 @@
 <div id="lightbox" role="dialog" aria-modal="true" aria-label="Просмотр фотографии">
   <button id="lbClose" title="Закрыть" aria-label="Закрыть">✕</button>
   <figure id="lbFig">
-    <div id="lbStatus">Загрузка…</div>
-    <img id="lbImg" alt="Историческое фото" style="display:none">
+    <div id="lbMedia">
+      <div id="lbStatus">Загрузка…</div>
+      <img id="lbImg" alt="Историческое фото" style="display:none">
+    </div>
     <figcaption>
       <div id="lbName"></div>
       <a id="lbSrc" target="_blank" rel="noopener">Источник: pastvu.com</a>
@@ -860,29 +859,66 @@ function openLightbox(src, name){
   lbImg.src = src;
   lbEl.classList.add('open');
 }
-/* видеоверсия лайтбокса: постер + ▶ + бейдж, управление то же, что в карточке */
-function openLightboxVideo(pt){
-  lbName.textContent = pt.n;
-  if(/^https?:\/\//.test(pt.ph)){ lbSrc.href = pt.ph; lbSrc.style.display = ''; }
-  else { lbSrc.removeAttribute('href'); lbSrc.style.display = 'none'; }
-  lbStatus.style.display = 'none';
+/* «ожившее фото» в лайтбоксе: снимок открывается как обычно (зум работает),
+   в правом нижнем углу — кнопка ▶, разворачивающая видео на месте фото;
+   во время игры она превращается в кнопку возврата к фотографии */
+const lbMedia = document.getElementById('lbMedia');
+
+function attachLbVideoControls(pt){
+  const btn = document.createElement('button');
+  btn.className = 'pv-play lb-vbtn';
+  btn.dataset.v = pt.v;
+  btn.dataset.poster = pt.ph;
+  btn.textContent = '▶';
+  btn.setAttribute('aria-label','Оживить фотографию');
+  btn.title = 'Ожившее фото';
+  const badge = document.createElement('span');
+  badge.className = 'pv-badge';
+  badge.textContent = 'ожившее фото · реконструкция';
+  lbMedia.appendChild(btn);
+  lbMedia.appendChild(badge);
+}
+
+function lbShowVideo(btn){
+  const v = document.createElement('video');
+  v.className = 'pv-video';
+  v.muted = true; v.loop = true; v.playsInline = true;
+  v.setAttribute('playsinline','');   /* iOS */
+  v.preload = 'none';
+  v.poster = btn.dataset.poster;
+  v.src = btn.dataset.v;              /* ленивая подстановка src — только сейчас */
   lbImg.style.display = 'none';
-  const wrap = document.createElement('div');
-  wrap.className = 'pv-wrap pv-lb';
-  wrap.dataset.v = pt.v;
-  wrap.innerHTML = `<img class="pv-poster" src="${pt.ph}" alt="Историческое фото">
-    <button class="pv-play" aria-label="Оживить фотографию" title="Ожившее фото">▶</button>
-    <span class="pv-badge">ожившее фото · реконструкция</span>`;
-  document.getElementById('lbFig').insertBefore(wrap, lbEl.querySelector('figcaption'));
-  lbEl.classList.add('open');
+  lbMedia.insertBefore(v, lbMedia.firstChild);
+  const m = document.createElement('button');
+  m.className = 'pv-mute';
+  m.textContent = '🔇';
+  m.setAttribute('aria-label','Включить звук');
+  lbMedia.appendChild(m);
+  btn.textContent = '↺';
+  btn.setAttribute('aria-label','Вернуть фотографию');
+  btn.title = 'Вернуть фотографию';
+  if(activeVideo && !activeVideo.paused) activeVideo.pause();
+  activeVideo = v;
+  v.play().catch(function(){});
+}
+
+function lbShowPhoto(btn){
+  unloadVideos(lbMedia);
+  const v = lbMedia.querySelector('video.pv-video'); if(v) v.remove();
+  const m = lbMedia.querySelector('.pv-mute'); if(m) m.remove();
+  lbImg.style.display = '';
+  btn.textContent = '▶';
+  btn.setAttribute('aria-label','Оживить фотографию');
+  btn.title = 'Ожившее фото';
 }
 
 function closeLightbox(){
   lbEl.classList.remove('open');
   lbImg.onload = lbImg.onerror = null;
   lbImg.removeAttribute('src');   /* останавливаем загрузку, если фото так и не пришло */
-  unloadVideos(lbEl);
-  const w = lbEl.querySelector('.pv-wrap'); if(w) w.remove();
+  unloadVideos(lbMedia);
+  lbMedia.querySelectorAll('video.pv-video, .pv-play, .pv-mute, .pv-badge')
+    .forEach(function(el){ el.remove(); });
 }
 
 document.addEventListener('click', function(e){
@@ -891,10 +927,10 @@ document.addEventListener('click', function(e){
   const src = img.getAttribute('src');
   if(!src) return;
   const name = img.dataset.name || infoTitle.textContent;
-  /* у точки с «ожившим фото» и лайтбокс — видеоверсия */
-  const pt = P.find(p => p.n === name);
-  if(pt && pt.v && pt.ph){ openLightboxVideo(pt); return; }
+  /* фото всегда открывается лайтбоксом; у «ожившего фото» поверх — угловая кнопка ▶ */
   openLightbox(src, name);
+  const pt = P.find(p => p.n === name);
+  if(pt && pt.v && pt.ph) attachLbVideoControls(pt);
 });
 lbEl.addEventListener('click', function(e){
   /* клик по фону закрывает; по фотографии и подписи — нет */
@@ -948,10 +984,22 @@ function unloadVideos(scope){
 
 document.addEventListener('click', function(e){
   const play = e.target.closest('.pv-play');
-  if(play){ startVideo(play.closest('.pv-wrap')); return; }
+  if(play){
+    e.stopPropagation();   /* кнопка не должна «прокликивать» фото под собой */
+    if(play.classList.contains('lb-vbtn')){
+      /* в лайтбоксе: ▶ разворачивает видео, ↺ возвращает фотографию */
+      if(play.textContent === '▶') lbShowVideo(play);
+      else lbShowPhoto(play);
+    } else {
+      startVideo(play.closest('.pv-wrap'));
+    }
+    return;
+  }
   const mute = e.target.closest('.pv-mute');
   if(mute){
-    const v = mute.closest('.pv-wrap').querySelector('video.pv-video');
+    e.stopPropagation();
+    /* родитель — .pv-wrap в карточке или #lbMedia в лайтбоксе */
+    const v = mute.parentElement.querySelector('video.pv-video');
     if(v){
       v.muted = !v.muted;
       mute.textContent = v.muted ? '🔇' : '🔊';
