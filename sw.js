@@ -6,7 +6,7 @@
    чтобы карта открывалась без интернета и быстрее грузилась при повторных заходах.
    При обновлении карты меняйте VERSION — старые кэши будут удалены. */
 
-const VERSION      = 'v6';
+const VERSION      = 'v7';
 const APP_CACHE    = 'gilya-app-'   + VERSION;
 const TILE_CACHE   = 'gilya-tiles-' + VERSION;
 const PHOTO_CACHE  = 'gilya-photos-'+ VERSION;
@@ -20,6 +20,9 @@ const PRECACHE = [
   './points.json',
   './glossary.json',
   './manifest.json',
+  './photos/filippov-bakery.jpg',
+  './photos/butyrsky-zamok.jpg',
+  './photos/vospitatelny-dom.jpg',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',

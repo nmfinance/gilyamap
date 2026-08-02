@@ -781,7 +781,15 @@ const lbStatus = document.getElementById('lbStatus');
 
 function openLightbox(src, name){
   lbName.textContent = name || '';
-  lbSrc.href = src;
+  /* «Источник: pastvu.com» показываем только для фото с pastvu;
+     у локальных снимков из папки photos/ внешнего источника нет */
+  if(/^https?:\/\//.test(src)){
+    lbSrc.href = src;
+    lbSrc.style.display = '';
+  } else {
+    lbSrc.removeAttribute('href');
+    lbSrc.style.display = 'none';
+  }
   lbStatus.textContent = 'Загрузка…';
   lbStatus.style.display = '';
   lbImg.style.display = 'none';
