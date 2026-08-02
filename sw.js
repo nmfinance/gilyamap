@@ -6,7 +6,7 @@
    чтобы карта открывалась без интернета и быстрее грузилась при повторных заходах.
    При обновлении карты меняйте VERSION — старые кэши будут удалены. */
 
-const VERSION      = 'v15';
+const VERSION      = 'v16';
 const APP_CACHE    = 'gilya-app-'   + VERSION;
 const TILE_CACHE   = 'gilya-tiles-' + VERSION;
 const PHOTO_CACHE  = 'gilya-photos-'+ VERSION;
@@ -127,6 +127,13 @@ self.addEventListener('fetch', function(event){
 
   // 3. Фотографии pastvu
   if(url.hostname.endsWith('pastvu.com')){
+    event.respondWith(cacheFirst(req, PHOTO_CACHE, PHOTO_LIMIT));
+    return;
+  }
+
+  // 3а. Локальные фотографии (перенесены с pastvu в photos/) — тот же
+  //     фото-кэш с лимитом, а не бесконтрольный кэш приложения
+  if(url.pathname.indexOf('/photos/') !== -1){
     event.respondWith(cacheFirst(req, PHOTO_CACHE, PHOTO_LIMIT));
     return;
   }

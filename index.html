@@ -310,6 +310,25 @@
     background:rgba(239,230,210,.75); border:1px solid var(--ink-soft); padding:1px 6px;
     pointer-events:none;
   }
+  /* ---------- Галерея (несколько фото на точку) ---------- */
+  .gal-wrap{position:relative; margin:6px 0;}
+  .gal-wrap .pp-photo{margin:0;}
+  .gal-prev, .gal-next{
+    position:absolute; top:50%; transform:translateY(-50%);
+    width:44px; height:44px; border-radius:50%;              /* палец */
+    background:rgba(239,230,210,.8); color:var(--ink);       /* полупрозрачная бумага */
+    border:1px solid var(--ink-soft);
+    font-size:22px; line-height:1; cursor:pointer;
+  }
+  .gal-prev{left:8px;}
+  .gal-next{right:8px;}
+  .gal-prev:hover, .gal-next:hover{background:rgba(239,230,210,.95);}
+  .gal-count{
+    position:absolute; right:8px; top:8px;
+    font-family:'PT Sans Narrow', sans-serif; font-size:11px; letter-spacing:.08em;
+    background:rgba(239,230,210,.75); border:1px solid var(--ink-soft); color:var(--ink);
+    padding:1px 7px; pointer-events:none;
+  }
   /* лайтбокс: медиа-контейнер, чтобы угловые кнопки позиционировались по снимку */
   #lbMedia{position:relative;}
   #lbMedia .pv-video{
@@ -635,19 +654,25 @@ function openInfo(pt){
   let html = `<div class="info-chapter">Глава ${Number(pt.ch)+1} · «${chp.t}»</div>`;
   html += `<span class="pp-status ${pt.st}">${STATUS_T[pt.st]}</span>`;
   if(pt.ap) html += ` <span class="approx">место примерное</span>`;
-  if(pt.v && pt.ph){
-    /* «ожившее фото»: постер + кнопка ▶; сам <video> создаётся только по нажатию */
-    html += `<div class="pv-wrap" data-v="${pt.v}">
-      <img class="pp-photo" src="${pt.ph}" data-name="${pt.n}" alt="Историческое фото" loading="lazy" title="Открыть в увеличенном виде">
-      <button class="pv-play" aria-label="Оживить фотографию" title="Ожившее фото">▶</button>
-      <span class="pv-badge">ожившее фото · реконструкция</span>
-    </div>`;
-  } else if(pt.ph) html += `<img class="pp-photo" src="${pt.ph}" data-name="${pt.n}" alt="Историческое фото" loading="lazy" title="Открыть в увеличенном виде">`;
-  if(pt.ph && (pt.py || pt.pp)){
-    /* подпись: год съёмки и ссылка на страницу снимка на pastvu */
-    const capText = pt.py ? `Фотография ${pt.py} года` : 'Фотография';
-    const capSrc = pt.pp ? `<a href="${pt.pp}" target="_blank" rel="noopener">pastvu</a>` : 'pastvu';
-    html += `<div class="ph-cap">${capText} · ${capSrc}</div>`;
+  const phs = (pt.photos && pt.photos.length) ? pt.photos : null;
+  if(phs){
+    /* фото живут в контейнере галереи; при одном снимке стрелок нет.
+       Точка с видео получает и кнопку ▶ (постер видео — всегда photos[0]) */
+    const wrapCls = 'gal-wrap' + (pt.v ? ' pv-wrap' : '');
+    html += `<div class="${wrapCls}" data-name="${pt.n}" data-idx="0"${pt.v ? ` data-v="${pt.v}" data-poster="${phs[0].u}"` : ''}>
+      <img class="pp-photo" src="${phs[0].u}" data-name="${pt.n}" alt="Историческое фото" loading="lazy" title="Открыть в увеличенном виде">`;
+    if(pt.v){
+      html += `<button class="pv-play" aria-label="Оживить фотографию" title="Ожившее фото">▶</button>
+      <span class="pv-badge">ожившее фото · реконструкция</span>`;
+    }
+    if(phs.length > 1){
+      html += `<button class="gal-prev" aria-label="Предыдущий снимок">‹</button>
+      <button class="gal-next" aria-label="Следующий снимок">›</button>
+      <span class="gal-count">1 / ${phs.length}</span>`;
+    }
+    html += `</div>`;
+    const cap0 = photoCapHtml(phs[0]);
+    html += `<div class="ph-cap"${cap0 ? '' : ' style="display:none"'}>${cap0}</div>`;
   }
   const glFound = {};   /* каждый термин подчёркиваем один раз на карточку (d и q вместе) */
   if(pt.d) html += `<div class="pp-desc">${glMark(pt.d, glFound)}</div>`;
@@ -989,26 +1014,40 @@ const lbName   = document.getElementById('lbName');
 const lbSrc    = document.getElementById('lbSrc');
 const lbStatus = document.getElementById('lbStatus');
 
-function openLightbox(src, name, pt){
-  lbName.textContent = name || '';
-  /* Подпись-источник: если у точки есть страница снимка (pp) — ведём на неё
-     и показываем год (py); иначе прежнее поведение: ссылка на файл с pastvu,
-     а у локальных снимков из папки photos/ источника нет вовсе */
-  if(pt && pt.pp){
-    lbSrc.href = pt.pp;
-    lbSrc.textContent = pt.py ? `Фотография ${pt.py} года · pastvu.com` : 'Источник: pastvu.com';
+let lbPt = null, lbIdx = 0;   /* точка и номер снимка, открытые в лайтбоксе */
+
+/* Подпись-источник: год и страница текущего снимка; у локальных файлов
+   без страницы pastvu ссылки нет вовсе */
+function lbSetCaption(photo, src){
+  const pp = photo && photo.pp, py = photo && photo.y;
+  if(pp){
+    lbSrc.href = pp;
+    lbSrc.textContent = py ? `Фотография ${py} года · pastvu.com` : 'Источник: pastvu.com';
     lbSrc.style.display = '';
   } else if(/^https?:\/\//.test(src)){
     lbSrc.href = src;
-    lbSrc.textContent = 'Источник: pastvu.com';
+    lbSrc.textContent = py ? `Фотография ${py} года · pastvu.com` : 'Источник: pastvu.com';
     lbSrc.style.display = '';
   } else {
     lbSrc.removeAttribute('href');
     lbSrc.style.display = 'none';
   }
+}
+
+function lbLoadImg(src){
   lbStatus.textContent = 'Загрузка…';
   lbStatus.style.display = '';
   lbImg.style.display = 'none';
+  lbImg.removeAttribute('src');   /* иначе повторное открытие того же фото может не дать load */
+  lbImg.src = src;
+}
+
+function openLightbox(src, name, pt, idx){
+  lbName.textContent = name || '';
+  lbPt = pt || null;
+  lbIdx = idx || 0;
+  const photo = (pt && pt.photos && pt.photos[lbIdx]) || null;
+  lbSetCaption(photo, src);
   lbImg.onload = function(){
     lbStatus.style.display = 'none';
     lbImg.style.display = '';
@@ -1017,9 +1056,29 @@ function openLightbox(src, name, pt){
     lbStatus.textContent = 'Фотография недоступна';
     lbImg.style.display = 'none';
   };
-  lbImg.removeAttribute('src');   /* иначе повторное открытие того же фото может не дать load */
-  lbImg.src = src;
+  lbLoadImg(src);
+  /* галерея: стрелки и счётчик, если снимков больше одного */
+  if(pt && pt.photos && pt.photos.length > 1){
+    const n = pt.photos.length;
+    lbMedia.insertAdjacentHTML('beforeend',
+      `<button class="gal-prev" aria-label="Предыдущий снимок">‹</button>
+       <button class="gal-next" aria-label="Следующий снимок">›</button>
+       <span class="gal-count">${lbIdx + 1} / ${n}</span>`);
+  }
   lbEl.classList.add('open');
+}
+
+/* листание в лайтбоксе (закольцовано); во время видео не листаем */
+function lbGalShow(delta){
+  if(!lbPt || !lbPt.photos || lbPt.photos.length < 2) return;
+  if(lbMedia.querySelector('video.pv-video')) return;
+  const n = lbPt.photos.length;
+  lbIdx = ((lbIdx + delta) % n + n) % n;
+  const photo = lbPt.photos[lbIdx];
+  lbLoadImg(photo.u);           /* грузится только показываемый снимок */
+  const cnt = lbMedia.querySelector('.gal-count');
+  if(cnt) cnt.textContent = (lbIdx + 1) + ' / ' + n;
+  lbSetCaption(photo, photo.u);
 }
 /* «ожившее фото» в лайтбоксе: снимок открывается как обычно (зум работает),
    в правом нижнем углу — кнопка ▶, разворачивающая видео на месте фото;
@@ -1030,7 +1089,7 @@ function attachLbVideoControls(pt){
   const btn = document.createElement('button');
   btn.className = 'pv-play lb-vbtn';
   btn.dataset.v = pt.v;
-  btn.dataset.poster = pt.ph;
+  btn.dataset.poster = pt.photos[0].u;   /* постер видео — всегда первый снимок */
   btn.textContent = '▶';
   btn.setAttribute('aria-label','Оживить фотографию');
   btn.title = 'Ожившее фото';
@@ -1059,6 +1118,7 @@ function lbShowVideo(btn){
   btn.textContent = '↺';
   btn.setAttribute('aria-label','Вернуть фотографию');
   btn.title = 'Вернуть фотографию';
+  galControlsVisible(lbMedia, false);   /* пока играет видео, листание скрыто */
   if(activeVideo && !activeVideo.paused) activeVideo.pause();
   activeVideo = v;
   v.play().catch(function(){});
@@ -1072,6 +1132,7 @@ function lbShowPhoto(btn){
   btn.textContent = '▶';
   btn.setAttribute('aria-label','Оживить фотографию');
   btn.title = 'Ожившее фото';
+  galControlsVisible(lbMedia, true);
 }
 
 function closeLightbox(){
@@ -1079,8 +1140,9 @@ function closeLightbox(){
   lbImg.onload = lbImg.onerror = null;
   lbImg.removeAttribute('src');   /* останавливаем загрузку, если фото так и не пришло */
   unloadVideos(lbMedia);
-  lbMedia.querySelectorAll('video.pv-video, .pv-play, .pv-mute, .pv-badge')
+  lbMedia.querySelectorAll('video.pv-video, .pv-play, .pv-mute, .pv-badge, .gal-prev, .gal-next, .gal-count')
     .forEach(function(el){ el.remove(); });
+  lbPt = null; lbIdx = 0;
 }
 
 document.addEventListener('click', function(e){
@@ -1089,10 +1151,12 @@ document.addEventListener('click', function(e){
   const src = img.getAttribute('src');
   if(!src) return;
   const name = img.dataset.name || infoTitle.textContent;
-  /* фото всегда открывается лайтбоксом; у «ожившего фото» поверх — угловая кнопка ▶ */
+  /* фото всегда открывается лайтбоксом — с того снимка, который сейчас в карточке */
   const pt = P.find(p => p.n === name);
-  openLightbox(src, name, pt);
-  if(pt && pt.v && pt.ph) attachLbVideoControls(pt);
+  const wrap = img.closest('.gal-wrap');
+  const idx = wrap ? (+wrap.dataset.idx || 0) : 0;
+  openLightbox(src, name, pt, idx);
+  if(pt && pt.v && pt.photos && pt.photos.length) attachLbVideoControls(pt);
 });
 lbEl.addEventListener('click', function(e){
   /* клик по фону закрывает; по фотографии и подписи — нет */
@@ -1100,8 +1164,75 @@ lbEl.addEventListener('click', function(e){
 });
 document.getElementById('lbClose').addEventListener('click', closeLightbox);
 document.addEventListener('keydown', function(e){
-  if(e.key === 'Escape' && lbEl.classList.contains('open')) closeLightbox();
+  if(!lbEl.classList.contains('open')) return;
+  if(e.key === 'Escape') closeLightbox();
+  else if(e.key === 'ArrowLeft') lbGalShow(-1);
+  else if(e.key === 'ArrowRight') lbGalShow(1);
 });
+
+/* ===================== ГАЛЕРЕЯ ===================== */
+/* Несколько снимков на точку: стрелки ‹ › по краям, счётчик, свайп на таче.
+   Листание закольцовано; грузится только показываемый снимок. */
+function photoCapHtml(f){
+  if(!f || (!f.y && !f.pp)) return '';
+  const t = f.y ? `Фотография ${f.y} года` : 'Фотография';
+  const s = f.pp ? `<a href="${f.pp}" target="_blank" rel="noopener">pastvu</a>` : 'pastvu';
+  return t + ' · ' + s;
+}
+
+function galControlsVisible(scope, show){
+  scope.querySelectorAll('.gal-prev, .gal-next, .gal-count').forEach(function(el){
+    el.style.display = show ? '' : 'none';
+  });
+}
+
+/* листание в карточке */
+function galShow(wrap, idx){
+  const pt = P.find(function(p){ return p.n === wrap.dataset.name; });
+  const phs = pt && pt.photos;
+  if(!phs || phs.length < 2) return;
+  idx = ((idx % phs.length) + phs.length) % phs.length;   /* закольцовано */
+  wrap.dataset.idx = idx;
+  wrap.querySelector('img').src = phs[idx].u;   /* только текущий, соседей не предзагружаем */
+  const cnt = wrap.querySelector('.gal-count');
+  if(cnt) cnt.textContent = (idx + 1) + ' / ' + phs.length;
+  const cap = wrap.nextElementSibling;
+  if(cap && cap.classList.contains('ph-cap')){
+    const h = photoCapHtml(phs[idx]);
+    cap.innerHTML = h;
+    cap.style.display = h ? '' : 'none';
+  }
+}
+
+function galNav(scope, delta){
+  if(scope === lbMedia) lbGalShow(delta);
+  else galShow(scope, (+scope.dataset.idx || 0) + delta);
+}
+
+document.addEventListener('click', function(e){
+  const prev = e.target.closest('.gal-prev'), next = e.target.closest('.gal-next');
+  if(!prev && !next) return;
+  e.stopPropagation();   /* стрелка не «прокликивает» фото и не открывает лайтбокс */
+  const scope = (prev || next).closest('.gal-wrap') || lbMedia;
+  galNav(scope, next ? 1 : -1);
+});
+
+/* свайп на тач-экранах; когда развёрнуто видео — не листаем */
+let galTouchX = null, galTouchScope = null;
+document.addEventListener('touchstart', function(e){
+  const s = e.target.closest('.gal-wrap, #lbMedia');
+  if(!s) return;
+  galTouchScope = s;
+  galTouchX = e.touches[0].clientX;
+}, {passive:true});
+document.addEventListener('touchend', function(e){
+  if(!galTouchScope) return;
+  const s = galTouchScope; galTouchScope = null;
+  const dx = e.changedTouches[0].clientX - galTouchX;
+  if(Math.abs(dx) < 40) return;
+  if(s.querySelector('video.pv-video')) return;
+  galNav(s, dx < 0 ? 1 : -1);
+}, {passive:true});
 
 /* ===================== «ОЖИВШИЕ ФОТОГРАФИИ» ===================== */
 /* <video> создаётся только по нажатию ▶ — до этого трафик не тратится.
@@ -1118,7 +1249,8 @@ function startVideo(wrap){
     v.muted = true; v.loop = true; v.playsInline = true;
     v.setAttribute('playsinline','');   /* iOS */
     v.preload = 'none';
-    if(poster && poster.getAttribute('src')) v.poster = poster.getAttribute('src');
+    /* постер видео — всегда photos[0], даже если галерея пролистана дальше */
+    v.poster = wrap.dataset.poster || (poster ? poster.getAttribute('src') : '');
     v.src = wrap.dataset.v;             /* ленивая подстановка src — только сейчас */
     if(poster) poster.style.display = 'none';
     wrap.insertBefore(v, wrap.firstChild);
@@ -1129,6 +1261,7 @@ function startVideo(wrap){
     wrap.appendChild(mbtn);
     const pbtn = wrap.querySelector('.pv-play');
     if(pbtn) pbtn.style.display = 'none';
+    galControlsVisible(wrap, false);    /* видео на месте фото — листание скрыто */
   }
   if(activeVideo && activeVideo !== v && !activeVideo.paused) activeVideo.pause();
   activeVideo = v;
