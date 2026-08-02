@@ -571,29 +571,28 @@ function mapboxLayer(){
 
 /* ---- Переключатель подложек (внизу слева, всегда развёрнут) ---- */
 const hasMapbox   = Boolean(MAPBOX_TOKEN) && MAPBOX_PARTS.length >= 3;
-const streetsTile = osmLayer();
-const baseLayers  = {};
+const streetsTile = osmLayer().addTo(map);   /* OpenStreetMap — слой по умолчанию */
+const baseLayers  = { 'Карта OpenStreetMap': streetsTile };
 let mapboxTile = null;
 
 if(hasMapbox){
-  mapboxTile = mapboxLayer().addTo(map);   /* «Старая Москва» — по умолчанию */
-  baseLayers['Старая Москва'] = mapboxTile;
-} else {
-  streetsTile.addTo(map);                  /* без токена остаётся только схема улиц */
+  mapboxTile = mapboxLayer();               /* Mapbox — по выбору пользователя */
+  baseLayers['Карта Mapbox'] = mapboxTile;
 }
-baseLayers['Схема улиц'] = streetsTile;
 
 L.control.layers(baseLayers, null, {position:'bottomleft', collapsed:false}).addTo(map);
 
-/* Откат на OpenStreetMap, если Mapbox не отвечает. Переключаем слои через карту —
-   контрол слушает layeradd/layerremove и сам переставит отметку, без рассинхрона. */
+/* Откат на OpenStreetMap, если Mapbox не отвечает: актуален только когда
+   пользователь сам включил Mapbox (tileerror у неактивного слоя не бывает).
+   Переключаем слои через карту — контрол слушает layeradd/layerremove
+   и сам переставит отметку, без рассинхрона. */
 if(hasMapbox){
   let tileErrors = 0, switched = false;
   mapboxTile.on('tileerror', function(){
     tileErrors++;
     if(tileErrors >= 8 && !switched){       /* токен протух, лимит исчерпан или нет сети */
       switched = true;
-      if(map.hasLayer(mapboxTile)){         /* если пользователь уже сам выбрал схему — не мешаем */
+      if(map.hasLayer(mapboxTile)){
         map.removeLayer(mapboxTile);
         map.addLayer(streetsTile);
       }
